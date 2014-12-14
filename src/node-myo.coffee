@@ -6,19 +6,46 @@ client = arDrone.createClient()
 @offsetAccelZ = 0
 
 Myo = require("myo")
-myMyo = Myo.create(1)
+myMyo = Myo.create()
 console.log Myo.myos
 
 Myo.on "connected", ->
   console.log "connected: ", this
 
+Myo.on "arm_lost", ->
+  console.log "hello"
+  client.land()
+
+roll_mode = false
+
+move_mode = false
+
 myMyo.on "pose", (pose, edge) =>
-  if pose == "wave_out"
+  if pose == "wave_out" && edge
 #    myMyo.zeroOrientation()
+    client.disableEmergency()
+    client.takeoff()
+
     imu = myMyo.lastIMU
     @offsetAccelX = imu.accelerometer.x;
     @offsetAccelY = imu.accelerometer.y;
     @offsetAccelZ = imu.accelerometer.z;
+  else if pose == "wave_in" && edge
+    client.land()
+
+  else if pose == "fingers_spread" && edge
+    move_mode = true
+  else if pose == "fingers_spread" && !edge
+    move_mode = false
+
+
+  else if pose == "fist" && edge
+    roll_mode = true
+  else if pose == "fist" && !edge
+    roll_mode = false
+  else
+    client.stop()
+
 
 
 #
@@ -27,6 +54,7 @@ myMyo.on "imu", (data) =>
   roll = Math.atan2(2.0 * (data.orientation.w * data.orientation.x + data.orientation.y * data.orientation.z), 1.0 - 2.0 * (data.orientation.x * data.orientation.x + data.orientation.y * data.orientation.y))
   pitch = Math.asin(Math.max(-1.0, Math.min(1.0, 2.0 * (data.orientation.w * data.orientation.y - data.orientation.z * data.orientation.x))))
   yaw = Math.atan2(2.0 * (data.orientation.w * data.orientation.z + data.orientation.x * data.orientation.y), 1.0 - 2.0 * (data.orientation.y * data.orientation.y + data.orientation.z * data.orientation.z))
+  
   console.log "Quat: #{Math.round(data.orientation.x*100)} #{Math.round(data.orientation.y*100)} #{Math.round(data.orientation.z*100)} #{Math.round(data.orientation.w*100)}"
   console.log "Roll: #{Math.round(roll*100)}"
   console.log "Pitch: #{Math.round(pitch*100)}"
@@ -35,6 +63,22 @@ myMyo.on "imu", (data) =>
   console.log "AccelX: #{Math.round((data.accelerometer.x - @offsetAccelX)*100)} : #{Math.round((data.accelerometer.x)*100)}"
   console.log "AccelY: #{Math.round((data.accelerometer.y - @offsetAccelY)*100)} : #{Math.round((data.accelerometer.y)*100)}"
   console.log "AccelZ: #{Math.round((data.accelerometer.z - @offsetAccelZ)*100)} : #{Math.round((data.accelerometer.z)*100)}"
+  # console.log data
+  if roll < -0.5
+    # if 
+    # drone_rotate = "left"
+    console.log "left"
+    client.counterClockwise(0.5) if roll_mode
+    client.front(0.1) if move_mode
+
+  else if roll > 0.5
+    client.clockwise(0.5) if roll_mode
+    # client.front(0.1) if move_mode
+    console.log "right"
+  else 
+    client.stop()
+    console.log "nothing"
+
 
 # assume logo facing up, logo base facing body, palm facing down, tests done with left arm with a fist, reset with palm down
 #         roll, pitch, yaw -  quaternian        accelerometer -20
